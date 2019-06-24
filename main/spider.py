@@ -5,7 +5,16 @@ etree = lxml.html.etree
 from selenium import webdriver
 import time
 from pymongo import MongoClient
+import requests
+import re
+import hashlib
 
+session = requests.session()
+
+HEADERS = {
+    'Referer': 'https://passport.lagou.com/login/login.html',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.12; rv:51.0) Gecko/20100101 Firefox/51.0',
+}
 
 class WorkSpider:
     def __init__(self):
@@ -43,6 +52,35 @@ class WorkSpider:
             "iOS",
             "web前端",
         ]
+
+    def get_token(self):
+        Forge_Token = ""
+        Forge_Code = ""
+        login_page = 'https://passport.lagou.com/login/login.html'
+        data = session.get(login_page, headers=HEADERS)
+        match_obj = re.match(r'.*X_Anti_Forge_Token = \'(.*?)\';.*X_Anti_Forge_Code = \'(\d+?)\'', data.text, re.DOTALL)
+        if match_obj:
+            Forge_Token = match_obj.group(1)
+            Forge_Code = match_obj.group(2)
+        return Forge_Token, Forge_Code
+
+    def login(self, username, passwd):
+        X_Anti_Forge_Token, X_Anti_Forge_Code = get_token()
+        login_headers = HEADERS.copy()
+        login_headers.update({'X-Requested-With': 'XMLHttpRequest', 'X-Anit-Forge-Token': X_Anti_Forge_Token,
+                              'X-Anit-Forge-Code': X_Anti_Forge_Code})
+        postData = {
+            'isValidate': 'true',
+            'username': username,
+            'password': get_password(passwd),
+            'request_form_verifyCode': '',
+            'submit': '',
+        }
+        response = session.post('https://passport.lagou.com/login/login.json', data=postData, headers=login_headers)
+        print(response.text)
+
+    def get_cookies(self):
+        return requests.utils.dict_from_cookiejar(session.cookies)
 
     # 经过观察发现，拉钩的 url 随语言和城市的变化如下
     def getUrl(self, language, city):
@@ -90,7 +128,50 @@ class WorkSpider:
     # language => 编程语言
     # city => 城市
     # collectionType => 值：True/False  True => 数据库表以编程语言命名   False => 以城市命名
+    def get_password(self, passwd):
+        '''这里对密码进行了md5双重加密 veennike 这个值是在main.html_aio_f95e644.js文件找到的 '''
+        passwd = hashlib.md5(passwd.encode('utf-8')).hexdigest()
+        passwd = 'veenike' + passwd + 'veenike'
+        passwd = hashlib.md5(passwd.encode('utf-8')).hexdigest()
+        return passwd
     def main(self, language, city, collectionType):
+
+        # r1 = session.get('https://passport.lagou.com/login/login.html',
+        #                  headers={
+        #                      'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36',
+        #                  },
+        #                  )
+        #
+        # X_Anti_Forge_Token = re.findall("X_Anti_Forge_Token = '(.*?)'", r1.text, re.S)[0]
+        # X_Anti_Forge_Code = re.findall("X_Anti_Forge_Code = '(.*?)'", r1.text, re.S)[0]
+        # print(X_Anti_Forge_Code, X_Anti_Forge_Token)
+
+        # r2 = session.post('https://passport.lagou.com/login/login.json',
+        #                   headers={
+        #                       'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36',
+        #                       'Referer': 'https://passport.lagou.com/login/login.html',
+        #                       'X-Anit-Forge-Code': X_Anti_Forge_Code,
+        #                       'X-Anit-Forge-Token': X_Anti_Forge_Token,
+        #                       'X-Requested-With': 'XMLHttpRequest'
+        #                   },
+        #                   data={
+        #                       "isValidate": True,
+        #                       'username': '17521662140',
+        #                       'password': self.get_password('091001jane'),
+        #                       'request_form_verifyCode': '',
+        #                       'submit': ''
+        #                   }
+        #                   )
+        # r3 = session.get('https://passport.lagou.com/grantServiceTicket/grant.html',
+        #                  headers={
+        #                      'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36',
+        #                      'Referer': 'https://passport.lagou.com/login/login.html',
+        #                  }
+        #
+        username = '1371XXXXXXX'
+        passwd = 'xxxxxxxxxx'
+        login(username, passwd)
+        print(get_cookies())
         print(" 当前爬取的语言为 => " + language + "  当前爬取的城市为 => " + city)
         print(" 当前爬取的语言为 => " + language + "  当前爬取的城市为 => " + city)
         print(" 当前爬取的语言为 => " + language + "  当前爬取的城市为 => " + city)
